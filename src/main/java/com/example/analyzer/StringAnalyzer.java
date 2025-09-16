@@ -1,4 +1,4 @@
-package com.example;
+package com.example.analyzer;
 
 import java.util.HashSet;
 import java.util.Set;

@@ -4,6 +4,11 @@ import org.objectweb.asm.*;
 import org.objectweb.asm.commons.ClassRemapper;
 import org.objectweb.asm.commons.Remapper;
 
+import com.example.JEBJsonParser.Node;
+import com.example.analyzer.FieldAnalyzer;
+import com.example.analyzer.MemberAnalyzer;
+import com.example.analyzer.StringAnalyzer;
+
 import java.io.*;
 import java.util.*;
 import java.util.jar.JarEntry;
@@ -29,7 +34,6 @@ public class JarRenamer {
 
     private final Map<String, String> consistentRenamingCache = new HashMap<>();
 
-    // 构造函数保持原有参数
     public JarRenamer(File jarFile, List<Node> classNames, List<Node> methodNames,
                              List<Node> fieldNames, Set<String> excludeClasses) {
         this.jarFile = jarFile;

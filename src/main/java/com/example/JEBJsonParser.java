@@ -9,30 +9,16 @@ import java.util.Map;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-public class Launcher {
-    public static List<Node> classNodes = new ArrayList<>();
-    public static List<Node> methodNodes = new ArrayList<>();
-    public static List<Node> fieldNodes = new ArrayList<>();
+public class JEBJsonParser {
+    public List<Node> classNodes = new ArrayList<>();
+    public List<Node> methodNodes = new ArrayList<>();
+    public List<Node> fieldNodes = new ArrayList<>();
 
-    public static void main(String[] args) {
-        try {
-            readJEBJSON(new File("C:\\xxx\\JEB\\bin\\codedata.txt"));
-
-            File jarFile = new File("C:\\target.jar");
-            JarRenamer renamer = new JarRenamer(
-                jarFile,
-                classNodes,
-                methodNodes,
-                fieldNodes,
-                null);
-            File outputFile = renamer.execute();
-            System.out.println("Output file: " + outputFile.getAbsolutePath());
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+    public JEBJsonParser(File jsonFile) throws IOException {
+        readJEBJson(jsonFile);
     }
 
-    public static void readJEBJSON(File jsonFile) throws IOException{
+    public void readJEBJson(File jsonFile) throws IOException{
         ObjectMapper objectMapper = new ObjectMapper();
         Map<String, Object> originalData = objectMapper.readValue(
             jsonFile, 
@@ -115,4 +101,12 @@ public class Launcher {
             }
         }
     }
+    public class Node {
+        public String owner;
+        public String name;
+        public String desc;
+        public String newName;
+    }
 }
+
+
