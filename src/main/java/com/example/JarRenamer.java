@@ -19,6 +19,7 @@ public class JarRenamer {
 
     private final Map<String, String> fieldMappingGlobal = new HashMap<>();
     private final Map<String, String> methodMappingGlobal = new HashMap<>();
+    private final Map<String, String> stringMappingGlobal = new HashMap<>();
 
     private final Map<String, Integer> classNameCounters = new HashMap<>();
     private final Map<String, Integer> methodNameCounters = new HashMap<>();
@@ -28,9 +29,9 @@ public class JarRenamer {
 
     private final Map<String, String> consistentRenamingCache = new HashMap<>();
 
+    // 构造函数保持原有参数
     public JarRenamer(File jarFile, List<Node> classNames, List<Node> methodNames,
-                             List<Node> fieldNames,
-                             Set<String> excludeClasses) {
+                             List<Node> fieldNames, Set<String> excludeClasses) {
         this.jarFile = jarFile;
         this.excludeClasses = excludeClasses;
         this.classNodes = classNames;
@@ -44,6 +45,7 @@ public class JarRenamer {
         File outputFile = new File(jarFile.getParentFile(), baseName + "-renamed.jar");
         analyzeClasses();
         analyzeFieldsAndMethods();
+        analyzeStrings();
         try (JarInputStream jarIn = new JarInputStream(new FileInputStream(jarFile));
              JarOutputStream jarOut = new JarOutputStream(new FileOutputStream(outputFile))) {
             Set<String> processedEntries = new HashSet<>();
@@ -52,13 +54,12 @@ public class JarRenamer {
                 String entryName = entry.getName();
                 if (entryName.endsWith(".class")) {
                     String className = entryName.substring(0, entryName.length() - 6).replace('/', '.');
-                    boolean shouldRename = excludeClasses == null || !excludeClasses.contains(className);
 
                     byte[] classBytes = readAllBytes(jarIn);
                     byte[] transformedClass = transformClass(classBytes, className);
 
                     String newEntryName;
-                    if (shouldRename) {
+                    if (excludeClasses == null || !excludeClasses.contains(className)) {
                         String newClassName = getConsistentNameForClass(className);
                         newEntryName = newClassName != null
                                 ? newClassName.replace('.', '/') + ".class"
@@ -90,6 +91,62 @@ public class JarRenamer {
         }
 
         return outputFile;
+    }
+    private void analyzeStrings() throws IOException {
+        if ((classNodes == null || classNodes.isEmpty()) && 
+            (methodNodes == null || methodNodes.isEmpty())) {
+            return;
+        }
+        
+        try (JarInputStream jarIn = new JarInputStream(new FileInputStream(jarFile))) {
+            JarEntry entry;
+            while ((entry = jarIn.getNextJarEntry()) != null) {
+                String entryName = entry.getName();
+
+                if (entryName.endsWith(".class")) {
+                    String className = entryName.substring(0, entryName.length() - 6).replace('/', '.');
+
+                    if (excludeClasses == null || !excludeClasses.contains(className)) {
+                        byte[] classBytes = readAllBytes(jarIn);
+                        ClassReader reader = new ClassReader(classBytes);
+                        StringAnalyzer analyzer = new StringAnalyzer(className);
+                        reader.accept(analyzer, 0);
+                        
+                        for (String originalString : analyzer.getFoundStrings()) {
+                            if (!stringMappingGlobal.containsKey(originalString)) {
+                                String replacement = findClassOrMethodReplacement(originalString);
+                                if (replacement != null && !replacement.equals(originalString)) {
+                                    stringMappingGlobal.put(originalString, replacement);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            System.err.println("String analysis completed.");
+        } catch (IOException e) {
+            throw new IOException("Error analyzing strings: " + e.getMessage(), e);
+        }
+    }
+
+    private String findClassOrMethodReplacement(String original) {
+        if (classNodes != null && !classNodes.isEmpty()) {
+            for (Node node : classNodes) {
+                if (node.desc.equals(original)) {
+                    return node.newName;
+                }
+            }
+        }
+        
+        if (methodNodes != null && !methodNodes.isEmpty()) {
+            for (Node node : methodNodes) {
+                if (node.name.equals(original)) {
+                    return node.newName;
+                }
+            }
+        }
+        
+        return null;
     }
 
     private String getConsistentNameForClass(String className) {
@@ -124,6 +181,10 @@ public class JarRenamer {
         return newName;
     }
 
+    private String getReplacementForString(String originalString) {
+        return stringMappingGlobal.getOrDefault(originalString, originalString);
+    }
+
     private void analyzeClasses() throws IOException {
         try (JarInputStream jarIn = new JarInputStream(new FileInputStream(jarFile))) {
             JarEntry entry;
@@ -150,9 +211,7 @@ public class JarRenamer {
                 if (entryName.endsWith(".class")) {
                     String className = entryName.substring(0, entryName.length() - 6).replace('/', '.');
 
-                    boolean shouldRename = excludeClasses == null || !excludeClasses.contains(className);
-
-                    if (shouldRename) {
+                    if (excludeClasses == null || !excludeClasses.contains(className)) {
                         byte[] classBytes = readAllBytes(jarIn);
                         ClassReader reader = new ClassReader(classBytes);
                         MemberAnalyzer analyzer = new MemberAnalyzer(className);
@@ -218,7 +277,7 @@ public class JarRenamer {
         ClassReader reader = new ClassReader(classBytes);
         ClassWriter writer = new ClassWriter(reader, ClassWriter.COMPUTE_MAXS);
 
-        ClassRemapper remapper = new ClassRemapper(writer, new CustomRemapper());
+        ClassRemapper remapper = new ClassRemapper(writer, new CustomRemapper(className));
         reader.accept(remapper, ClassReader.EXPAND_FRAMES);
 
         return writer.toByteArray();
@@ -282,7 +341,7 @@ public class JarRenamer {
         private final Map<String, String> fieldMappings = new HashMap<>();
         private final Map<String, String> methodMappings = new HashMap<>();
 
-        public CustomRemapper() {
+        public CustomRemapper(String currentClassName) {
             fieldMappings.putAll(fieldMappingGlobal);
             methodMappings.putAll(methodMappingGlobal);
         }
@@ -334,5 +393,17 @@ public class JarRenamer {
             }
             return name;
         }
+
+        @Override
+        public Object mapValue(Object value) {
+            if (value instanceof String) {
+                String original = (String) value;
+                String replacement = getReplacementForString(original);
+                return replacement != null ? replacement : original;
+            }
+            return super.mapValue(value);
+        }
     }
+
 }
+    

@@ -6,9 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
-import com.fasterxml.jackson.core.exc.StreamReadException;
 import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.DatabindException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 public class Launcher {
@@ -21,13 +19,13 @@ public class Launcher {
             readJEBJSON(new File("C:\\xxx\\JEB\\bin\\codedata.txt"));
 
             File jarFile = new File("C:\\target.jar");
-            JarRenamer renamerService = new JarRenamer(
+            JarRenamer renamer = new JarRenamer(
                 jarFile,
                 classNodes,
                 methodNodes,
                 fieldNodes,
                 null);
-            File outputFile = renamerService.execute();
+            File outputFile = renamer.execute();
             System.out.println("Output file: " + outputFile.getAbsolutePath());
         } catch (IOException e) {
             e.printStackTrace();
